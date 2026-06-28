@@ -5,8 +5,11 @@ AI-related functions for transcript analysis with enhanced precision and viralit
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Literal
 import asyncio
+import json
 import logging
 import re
+import shutil
+import subprocess
 
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
@@ -73,6 +76,23 @@ class ViralityAnalysis(BaseModel):
         default="The model did not provide a detailed virality breakdown.",
         description="Explanation of the virality score",
     )
+
+    @field_validator("hook_type", mode="before")
+    @classmethod
+    def _coerce_hook_type(cls, value: Any) -> Any:
+        """Coerce off-enum or free-form hook_type values to a valid literal.
+
+        The pydantic-ai Agent path constrains output to the schema, but the
+        claude-cli path parses free-form JSON, where models routinely return
+        descriptive hook types ("bold_claim", "contrarian_mistake", ...). Map
+        anything outside the allowed set to "none" instead of failing the job.
+        """
+        allowed = {"question", "statement", "statistic", "story", "contrast", "none"}
+        if value is None:
+            return "none"
+        if isinstance(value, str) and value.strip().lower() in allowed:
+            return value.strip().lower()
+        return "none"
 
 
 def _default_virality_analysis() -> ViralityAnalysis:
@@ -295,7 +315,7 @@ Find 2-5 compelling segments that would work well as standalone clips. Quality o
 _transcript_agent: Optional[Agent[None, TranscriptAnalysis]] = None
 _transcript_agent_signature: Optional[tuple[str | None, ...]] = None
 
-SUPPORTED_LLM_PROVIDERS = {"google", "google-gla", "openai", "anthropic", "ollama"}
+SUPPORTED_LLM_PROVIDERS = {"google", "google-gla", "openai", "anthropic", "ollama", "claude-cli"}
 
 
 def _split_llm_name(model_name: str) -> tuple[str, str | None]:
@@ -313,7 +333,7 @@ def _get_missing_llm_key_error(model_name: str, runtime_config: Config) -> Optio
     if provider not in SUPPORTED_LLM_PROVIDERS:
         return (
             f"Unsupported LLM provider '{provider}'. "
-            "Use google-gla:*, openai:*, anthropic:*, or ollama:*."
+            "Use google-gla:*, openai:*, anthropic:*, ollama:*, or claude-cli:*."
         )
 
     if not provider_model_name:
@@ -321,6 +341,17 @@ def _get_missing_llm_key_error(model_name: str, runtime_config: Config) -> Optio
             "Selected LLM is missing a model name. "
             "Use the format provider:model, for example ollama:gpt-oss:20b."
         )
+
+    if provider == "claude-cli":
+        # Self-host only: drives the locally-installed Claude Code CLI using its
+        # own auth (subscription / OAuth). No ANTHROPIC_API_KEY is needed; what we
+        # require instead is the `claude` binary on PATH.
+        if shutil.which("claude") is None:
+            return (
+                "LLM provider is claude-cli, but the `claude` CLI was not found on PATH. "
+                "Install Claude Code and authenticate it, or choose another provider."
+            )
+        return None
 
     if provider in {"google", "google-gla"} and not runtime_config.google_api_key:
         return (
@@ -609,6 +640,90 @@ def _repair_segment_bounds(
     return repaired_start, repaired_end
 
 
+def _strip_markdown_code_fences(text: str) -> str:
+    """Strip a leading/trailing markdown code fence (```json ... ```), if present."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```[a-zA-Z0-9_-]*\n?", "", stripped)
+        stripped = re.sub(r"\n?```$", "", stripped)
+    return stripped.strip()
+
+
+def _extract_claude_cli_result_text(envelope: Any) -> str:
+    """Pull the assistant's reply text out of the `claude --output-format json` envelope.
+
+    The envelope has historically been a top-level object with a `result` string.
+    Be defensive about shape drift: prefer `result`, fall back to a few likely
+    keys, and fail loudly (rather than silently returning empty) if none match.
+    """
+    if isinstance(envelope, dict):
+        for key in ("result", "text", "response", "output"):
+            value = envelope.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        raise RuntimeError(
+            "Unexpected Claude CLI JSON envelope: expected a non-empty 'result' "
+            f"string. Got top-level keys: {sorted(envelope.keys())}"
+        )
+    raise RuntimeError(
+        "Unexpected Claude CLI JSON envelope: expected a JSON object, got "
+        f"{type(envelope).__name__}"
+    )
+
+
+def run_claude_cli_analysis(prompt: str, model: str) -> TranscriptAnalysis:
+    """Run transcript analysis through the locally-installed Claude Code CLI.
+
+    Self-host only: shells out to the `claude` binary in headless print mode,
+    relying on Claude Code's own auth (subscription / OAuth) -- no
+    ANTHROPIC_API_KEY and no per-token billing. NOT used by the hosted Docker
+    stack. Synchronous (blocking); call it via asyncio.to_thread.
+    """
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "The `claude` CLI was not found on PATH. Install Claude Code and "
+            "authenticate it, or choose another LLM provider."
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("Claude CLI timed out during transcript analysis.") from e
+
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"Claude CLI exited with code {completed.returncode}: "
+            f"{(completed.stderr or '').strip() or '<no stderr>'}"
+        )
+
+    envelope_text = (completed.stdout or "").strip()
+    if not envelope_text:
+        raise RuntimeError("Claude CLI returned empty stdout.")
+
+    try:
+        envelope = json.loads(envelope_text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"Could not parse Claude CLI JSON envelope ({e}). Got: {envelope_text[:500]}"
+        ) from e
+
+    inner_text = _strip_markdown_code_fences(_extract_claude_cli_result_text(envelope))
+    try:
+        data = json.loads(inner_text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"Claude CLI result was not valid TranscriptAnalysis JSON ({e}). "
+            f"Got: {inner_text[:500]}"
+        ) from e
+
+    return TranscriptAnalysis(**data)
+
+
 async def get_most_relevant_parts_by_transcript(
     transcript: str, include_broll: bool = False, clip_signals: str | None = None
 ) -> TranscriptAnalysis:
@@ -618,17 +733,28 @@ async def get_most_relevant_parts_by_transcript(
     )
 
     try:
-        agent = get_transcript_agent()
-
-        result = await agent.run(
-            build_transcript_analysis_prompt(
-                transcript=transcript,
-                include_broll=include_broll,
-                clip_signals=clip_signals,
-            )
+        runtime_config = get_config()
+        provider, model_name = _split_llm_name(runtime_config.llm)
+        prompt = build_transcript_analysis_prompt(
+            transcript=transcript,
+            include_broll=include_broll,
+            clip_signals=clip_signals,
         )
 
-        analysis = result.output
+        if provider == "claude-cli":
+            # The pydantic-ai Agent path validates config inside get_transcript_agent;
+            # the claude-cli path bypasses the Agent, so run the same check here.
+            config_error = _get_missing_llm_key_error(runtime_config.llm, runtime_config)
+            if config_error:
+                raise RuntimeError(config_error)
+            analysis = await asyncio.to_thread(
+                run_claude_cli_analysis, prompt, model_name
+            )
+        else:
+            agent = get_transcript_agent()
+            result = await agent.run(prompt)
+            analysis = result.output
+
         logger.info(
             f"AI analysis found {len(analysis.most_relevant_segments)} segments"
         )
