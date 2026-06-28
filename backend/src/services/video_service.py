@@ -37,6 +37,7 @@ from ..config import get_config
 
 logger = logging.getLogger(__name__)
 UPLOAD_URL_PREFIX = "upload://"
+LOCAL_URL_PREFIX = "local://"
 
 
 class VideoService:
@@ -93,11 +94,13 @@ class VideoService:
 
     @staticmethod
     def resolve_local_video_path(url: str) -> Path:
-        """Resolve uploaded-video references without exposing server filesystem paths."""
+        """Resolve uploaded-video or local-file references to a filesystem path."""
         if url.startswith(UPLOAD_URL_PREFIX):
             filename = Path(url.removeprefix(UPLOAD_URL_PREFIX)).name
             return Path(get_config().temp_dir) / "uploads" / filename
-        raise ValueError("Only upload:// references are allowed for local video sources")
+        if url.startswith(LOCAL_URL_PREFIX):
+            return Path(url.removeprefix(LOCAL_URL_PREFIX))
+        raise ValueError("Only upload:// or local:// references are allowed for local video sources")
 
     @staticmethod
     async def download_video(url: str, task_id: Optional[str] = None) -> Optional[Path]:
@@ -339,13 +342,15 @@ class VideoService:
 
     @staticmethod
     def determine_source_type(url: str) -> str:
-        """Determine if source is YouTube or uploaded file."""
+        """Determine if source is YouTube, an uploaded file, or a local file reference."""
         video_id = get_youtube_video_id(url)
         if video_id:
             return "youtube"
         if url.startswith(UPLOAD_URL_PREFIX):
             return "video_url"
-        raise ValueError("Only YouTube URLs or upload:// references are supported")
+        if url.startswith(LOCAL_URL_PREFIX):
+            return "local_file"
+        raise ValueError("Only YouTube URLs, upload://, or local:// references are supported")
 
     @staticmethod
     async def process_video_complete(

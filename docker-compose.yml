@@ -81,6 +81,9 @@ services:
       - ./backend/fonts:/app/fonts
       - ./backend/transitions:/app/transitions
       - whisper_models:/app/.cache
+      # Mount host Claude config so the claude-cli LLM provider can authenticate.
+      # Only needed when LLM=claude-cli:*; harmless otherwise.
+      - ~/.claude:/root/.claude
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -155,6 +158,9 @@ services:
       - ./backend/fonts:/app/fonts
       - ./backend/transitions:/app/transitions
       - whisper_models:/app/.cache
+      # Mount host Claude config so the claude-cli LLM provider can authenticate.
+      # Only needed when LLM=claude-cli:*; harmless otherwise.
+      - ~/.claude:/root/.claude
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1

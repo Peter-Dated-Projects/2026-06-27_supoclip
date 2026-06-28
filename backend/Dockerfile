@@ -12,6 +12,14 @@ RUN apt-get update && apt-get install -y \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js 20 LTS (required for Claude Code CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI (enables the claude-cli LLM provider)
+RUN npm install -g @anthropic-ai/claude-code
+
 # Install deno (required by yt-dlp for YouTube JS challenge solving)
 RUN curl -fsSL https://deno.land/install.sh | sh
 ENV DENO_DIR=/root/.deno

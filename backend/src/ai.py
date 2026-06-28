@@ -679,7 +679,7 @@ def run_claude_cli_analysis(prompt: str, model: str) -> TranscriptAnalysis:
     ANTHROPIC_API_KEY and no per-token billing. NOT used by the hosted Docker
     stack. Synchronous (blocking); call it via asyncio.to_thread.
     """
-    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model, "--max-tokens", "16000"]
     try:
         completed = subprocess.run(
             cmd,

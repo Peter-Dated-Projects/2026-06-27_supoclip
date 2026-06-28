@@ -17,7 +17,7 @@ from ..repositories.task_repository import TaskRepository
 from ..repositories.source_repository import SourceRepository
 from ..repositories.clip_repository import ClipRepository
 from ..repositories.cache_repository import CacheRepository
-from .video_service import VideoService
+from .video_service import LOCAL_URL_PREFIX, VideoService
 from .task_completion_email_service import (
     TaskCompletionEmailService,
     TaskCompletionRecipient,
@@ -111,6 +111,8 @@ class TaskService:
         if not title:
             if source_type == "youtube":
                 title = await self.video_service.get_video_title(url)
+            elif source_type == "local_file":
+                title = Path(url.removeprefix(LOCAL_URL_PREFIX)).name
             else:
                 title = "Uploaded Video"
 

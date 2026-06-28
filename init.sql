@@ -35,7 +35,7 @@ CREATE TABLE users (
 -- Source table (created before tasks since tasks reference sources)
 CREATE TABLE sources (
     id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
-    type VARCHAR(20) CHECK (type IN ('youtube', 'video_url')) NOT NULL,
+    type VARCHAR(20) CHECK (type IN ('youtube', 'video_url', 'local_file')) NOT NULL,
     title VARCHAR(500) NOT NULL,
     url VARCHAR(1000),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
