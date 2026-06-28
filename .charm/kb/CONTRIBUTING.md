@@ -1,0 +1,68 @@
+# Contributing to the Knowledge Base
+
+This is a **durable** knowledge base -- it survives between charm runs and across sessions.
+Keep it accurate: a note the next agent trusts but that lies is worse than no note at all.
+
+## How to add a note
+
+1. Pick the right root: `architecture`, `decisions`, `conventions`, `gotchas`, `domain`,
+   or `tracks/<name>` (see below).
+   Only add a new root directory if nothing genuinely fits -- and if you do, give it an
+   `_index.md` and add a row to `INDEX.md`.
+2. Write **one concept per note** (atomic). Filename is lowercase-kebab (`spawn-model.md`);
+   decisions use a zero-padded numeric prefix (`0001-single-git-tree.md`).
+3. Add the frontmatter below. `summary` is the most important field -- one self-contained
+   sentence a reader can judge *without opening the note*.
+4. Add a row for the note in that root's `_index.md`, and bump the count in `INDEX.md`.
+
+## Frontmatter schema
+
+```yaml
+---
+id: <kebab-slug>          # matches the filename without .md
+root: architecture        # architecture | decisions | conventions | gotchas | domain
+type: architecture | decision | convention | gotcha | domain
+status: current | stale | superseded
+summary: "One self-contained sentence -- the navigation surface."
+related:                  # KB-relative paths, no .md extension; optional
+  - decisions/0001-single-git-tree
+created: YYYY-MM-DD        # set once, immutable
+updated: YYYY-MM-DD
+---
+```
+
+## Updating notes
+
+- Reversed a decision? Set the old note to `status: superseded`, point its `related` at the
+  replacement -- do **not** delete it (keep the audit trail).
+- Suspect a note is out of date but haven't reverified? Mark it `status: stale`.
+- Any edit: bump `updated`.
+
+## Links
+
+Use ordinary markdown relative links in note bodies, and KB-relative paths in `related`.
+Not Obsidian `[[wikilinks]]` -- this KB is read with file tools, not a graph UI.
+
+## Track notes (`tracks/<name>/`)
+
+Some lines of work live on their own git branch (worktrees) and produce notes that only
+make sense in that context -- research output, scratchpad, in-progress ideas, or
+track-specific design decisions that would clutter the shared KB.
+
+Use `tracks/<name>/` for these. Convention:
+
+- `<name>` matches the worktree name (e.g. `tracks/native-ui/`, `tracks/go-rewrite/`).
+- Each track directory gets an `INDEX.md` listing what is there and a one-line description
+  of the track's goal.
+- Frontmatter is optional here -- scratchpad format is fine.
+- Notes that turn out to be durable and cross-cutting should be promoted to one of the
+  shared roots (architecture, decisions, etc.) and removed from the track folder.
+
+Track notes live on the worktree's branch, not on main. The shared KB roots are
+branch-agnostic; track notes are branch-specific.
+
+## Navigation (how the KB is meant to be read)
+
+Read `INDEX.md` -> the relevant root's `_index.md` -> only the 1-2 notes whose summary
+matches the task. Never bulk-read the KB. If you can't find what you need from summaries,
+the summaries need fixing.

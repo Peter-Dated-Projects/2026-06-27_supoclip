@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SupoClip is an open-source alternative to OpusClip — an AI-powered video clipping tool that transforms long-form content into viral short clips. AGPL-3.0 licensed.
 
+## Documentation
+
+A full documentation hub lives in `docs/` — start with `docs/README.md`. Most relevant for deeper work:
+- `docs/architecture.md` — end-to-end system map (services, layered backend, task lifecycle, video pipeline, data model)
+- `docs/development.md` — repo layout, per-app commands, where to modify major features
+- `docs/api-reference.md` — frontend proxy routes and backend endpoints
+- `docs/configuration.md`, `docs/setup.md`, `docs/troubleshooting.md`
+
+`AGENTS.md` (repo root) holds contributor/agent conventions (structure, commands, style, security). This file (CLAUDE.md) is the quick reference; `docs/` is the source of truth and is kept current.
+
 ## Development Commands
 
 ### Docker (recommended)
@@ -18,7 +28,9 @@ docker-compose logs -f worker     # Debug video processing
 docker-compose down               # Stop all services
 ```
 
-Services: Frontend (:3000), Backend API (:8000, docs at /docs), Worker (ARQ), PostgreSQL (:5432), Redis (:6379)
+Services: Frontend (:3107), Backend API (:8000, docs at /docs), Worker (ARQ), PostgreSQL (:5432), Redis (:6379)
+
+A single-command wrapper over the stack lives at the repo root: `./frieren.sh up` (and `setup`, `down`, `logs`, `test`, etc. — run `./frieren.sh help`).
 
 ### Backend (local)
 
@@ -46,17 +58,16 @@ pnpm run build        # Prisma generate + Next.js build
 pnpm run lint
 ```
 
-### Waitlist
+### Tests
 
 ```bash
-cd waitlist
-pnpm install
-pnpm run dev
+make test            # Backend (pytest) + frontend (vitest)
+make test-backend    # uv sync + pytest in backend/
+make test-frontend   # npm install + vitest coverage in frontend/
+make test-e2e        # Playwright e2e (frontend/)
 ```
 
-### No tests
-
-The project currently has no test files.
+Backend tests live in `backend/tests/` (`unit/`, `integration/`, `conftest.py`); frontend uses vitest plus Playwright for e2e. Note the Makefile drives the frontend with `npm` even though the frontend's declared package manager is pnpm (`packageManager: pnpm@10.27.0`, `pnpm-lock.yaml`) — for local dev use pnpm.
 
 ## Architecture
 
@@ -201,3 +212,6 @@ Edit `backend/src/ai.py`: `simplified_system_prompt` controls selection criteria
 - Output: 9:16 vertical format, H.264, even pixel dimensions (`round_to_even()`)
 - Subtitles positioned at 75% down the frame
 - Virality scoring: `hook_score`, `engagement_score`, `value_score`, `shareability_score` (0-25 each, summed to `virality_score` 0-100)
+
+<!-- charm: load the shared multi-agent workspace context (auto-added by `charm init`) -->
+@.charm/CHARM.md
