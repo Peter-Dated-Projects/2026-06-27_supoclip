@@ -49,6 +49,10 @@ If you are new to the project, start here:
   - Stuck tasks
   - Auth, fonts, billing, and YouTube issues
   - Performance and recovery guidance
+- [Handoff: Local Whisper and claude-cli provider](./handoff-local-whisper-and-claude-cli.md)
+  - Local transcription with faster-whisper (no AssemblyAI key)
+  - claude-cli LLM provider (self-host only, no Anthropic API key)
+  - Self-host versus Docker support matrix
 
 ## What SupoClip Is
 
