@@ -487,6 +487,13 @@ JSON-only output requirements:
 - Virality keys: "hook_score", "engagement_score", "value_score", "shareability_score", "total_score", "hook_type", "virality_reasoning".
 - Do not return segments shorter than {MIN_ACCEPTED_CLIP_SECONDS} seconds or longer than {MAX_ACCEPTED_CLIP_SECONDS} seconds.
 
+BREVITY CONSTRAINTS (required — the output has a hard size limit):
+- "text": first sentence only from the spoken content in the range, max 15 words. Do not include the full speech; the system reconstructs full text from timestamps.
+- "reasoning": max 20 words.
+- "virality_reasoning": max 15 words.
+- "summary": max 25 words.
+- "key_topics": 3-5 items, each 1-4 words.
+
 Transcript:
 {transcript}"""
 
@@ -679,7 +686,7 @@ def run_claude_cli_analysis(prompt: str, model: str) -> TranscriptAnalysis:
     ANTHROPIC_API_KEY and no per-token billing. NOT used by the hosted Docker
     stack. Synchronous (blocking); call it via asyncio.to_thread.
     """
-    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model, "--max-tokens", "16000"]
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
     try:
         completed = subprocess.run(
             cmd,
@@ -854,6 +861,21 @@ async def get_most_relevant_parts_by_transcript(
             ),
             reverse=True,
         )
+
+        # For claude-cli the prompt instructs the model to give abbreviated text
+        # to stay within the CLI's output token limit.  Reconstruct the full
+        # spoken text from the parsed transcript spans so subtitle generation
+        # has the complete content.
+        if provider == "claude-cli" and transcript_spans:
+            for seg in validated_segments:
+                try:
+                    s = _parse_transcript_timestamp_seconds(seg.start_time)
+                    e = _parse_transcript_timestamp_seconds(seg.end_time)
+                    full_text = _extract_transcript_text(transcript_spans, s, e)
+                    if full_text and len(full_text.split()) >= 3:
+                        seg.text = full_text
+                except (ValueError, Exception):
+                    pass
 
         final_analysis = TranscriptAnalysis(
             most_relevant_segments=validated_segments,
