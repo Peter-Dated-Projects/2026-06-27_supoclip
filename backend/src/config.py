@@ -19,7 +19,13 @@ class Config:
         self.ollama_base_url = self._get_runtime_setting("OLLAMA_BASE_URL")
         self.ollama_api_key = self._get_runtime_setting("OLLAMA_API_KEY")
 
-        self.whisper_model = os.getenv("WHISPER_MODEL", "base")
+        self.transcription_provider = self._normalize_transcription_provider(
+            os.getenv("TRANSCRIPTION_PROVIDER", "assemblyai")
+        )
+        # Standardize on WHISPER_MODEL_SIZE; keep WHISPER_MODEL as a back-compat fallback.
+        self.whisper_model_size = (
+            os.getenv("WHISPER_MODEL_SIZE") or os.getenv("WHISPER_MODEL") or "base"
+        )
         self.llm = self._get_runtime_setting("LLM") or self._infer_default_llm()
         self.assembly_ai_api_key = self._get_runtime_setting("ASSEMBLY_AI_API_KEY")
         self.assembly_ai_http_timeout_seconds = int(
@@ -148,6 +154,13 @@ class Config:
         if normalized in {"360", "480", "720", "1080"}:
             return normalized
         return "1080"
+
+    @staticmethod
+    def _normalize_transcription_provider(value: str | None) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized == "whisper":
+            return "whisper"
+        return "assemblyai"
 
     @staticmethod
     def _normalize_youtube_metadata_provider(value: str | None) -> str:

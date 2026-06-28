@@ -18,6 +18,7 @@ from ..youtube_utils import (
 )
 from ..video_utils import (
     get_video_transcript,
+    get_video_transcript_whisper,
     create_clips_with_transitions,
     create_optimized_clip,
     parse_timestamp_to_seconds,
@@ -131,16 +132,30 @@ class VideoService:
         video_path: Path, processing_mode: str = "balanced"
     ) -> str:
         """
-        Generate transcript from video using AssemblyAI.
+        Generate transcript from video using the configured provider
+        (AssemblyAI by default, or local faster-whisper).
         Runs in thread pool to avoid blocking.
         """
         logger.info(f"Generating transcript for: {video_path}")
-        speech_model = "best"
         runtime_config = get_config()
-        if processing_mode == "fast":
-            speech_model = runtime_config.fast_mode_transcript_model
 
-        transcript = await run_in_thread(get_video_transcript, video_path, speech_model)
+        if runtime_config.transcription_provider == "whisper":
+            model_size = runtime_config.whisper_model_size
+            # Fast mode favors a smaller model for speed, mirroring how the
+            # AssemblyAI path drops to the lighter "nano" speech model.
+            if processing_mode == "fast":
+                model_size = "base"
+            transcript = await run_in_thread(
+                get_video_transcript_whisper, video_path, model_size
+            )
+        else:
+            speech_model = "best"
+            if processing_mode == "fast":
+                speech_model = runtime_config.fast_mode_transcript_model
+            transcript = await run_in_thread(
+                get_video_transcript, video_path, speech_model
+            )
+
         logger.info(f"Transcript generated: {len(transcript)} characters")
         return transcript
 

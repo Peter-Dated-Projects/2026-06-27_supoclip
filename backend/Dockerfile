@@ -41,8 +41,16 @@ COPY src/ ./src/
 COPY fonts/ ./fonts/
 COPY transitions/ ./transitions/
 
+# faster-whisper downloads model weights from HuggingFace on first use.
+# Cache them under /app/.cache, which docker-compose backs with the
+# `whisper_models` named volume so weights survive restarts and are not
+# re-downloaded mid-job. (Chosen over baking a model into the image to keep
+# the image small and the model size configurable.)
+ENV HF_HOME=/app/.cache/huggingface
+ENV XDG_CACHE_HOME=/app/.cache
+
 # Create necessary directories for video processing
-RUN mkdir -p /app/uploads /app/clips /app/logs /tmp
+RUN mkdir -p /app/uploads /app/clips /app/logs /app/.cache/huggingface /tmp
 
 # Expose the port FastAPI will run on
 EXPOSE 8000

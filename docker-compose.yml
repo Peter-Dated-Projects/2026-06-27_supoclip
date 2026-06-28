@@ -80,6 +80,7 @@ services:
       - clips:/app/clips
       - ./backend/fonts:/app/fonts
       - ./backend/transitions:/app/transitions
+      - whisper_models:/app/.cache
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -101,7 +102,12 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - TRANSCRIPTION_PROVIDER=${TRANSCRIPTION_PROVIDER:-assemblyai}
       - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-medium}
+      # Cache faster-whisper model weights on a named volume so they survive
+      # restarts and are not re-downloaded mid-job.
+      - HF_HOME=/app/.cache/huggingface
+      - XDG_CACHE_HOME=/app/.cache
       - QUEUED_TASK_TIMEOUT_SECONDS=${QUEUED_TASK_TIMEOUT_SECONDS:-180}
       - DEFAULT_PROCESSING_MODE=${DEFAULT_PROCESSING_MODE:-fast}
       - FAST_MODE_MAX_CLIPS=${FAST_MODE_MAX_CLIPS:-4}
@@ -148,6 +154,7 @@ services:
       - clips:/app/clips
       - ./backend/fonts:/app/fonts
       - ./backend/transitions:/app/transitions
+      - whisper_models:/app/.cache
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -169,7 +176,12 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - TRANSCRIPTION_PROVIDER=${TRANSCRIPTION_PROVIDER:-assemblyai}
       - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-medium}
+      # Cache faster-whisper model weights on a named volume so they survive
+      # restarts and are not re-downloaded mid-job.
+      - HF_HOME=/app/.cache/huggingface
+      - XDG_CACHE_HOME=/app/.cache
       - QUEUED_TASK_TIMEOUT_SECONDS=${QUEUED_TASK_TIMEOUT_SECONDS:-180}
       - DEFAULT_PROCESSING_MODE=${DEFAULT_PROCESSING_MODE:-fast}
       - FAST_MODE_MAX_CLIPS=${FAST_MODE_MAX_CLIPS:-4}
@@ -245,6 +257,8 @@ volumes:
   uploads:
     driver: local
   clips:
+    driver: local
+  whisper_models:
     driver: local
   redis_data:
     driver: local

@@ -248,6 +248,86 @@ def get_video_transcript(video_path: Path, speech_model: str = "best") -> str:
         raise
 
 
+class _WhisperWord:
+    """Duck-typed word matching the shape AssemblyAI words expose.
+
+    Timestamps are stored in MILLISECONDS so this object is consumable by
+    `_serialize_transcript_word`, `cache_transcript_data`, and
+    `format_transcript_for_analysis` without any branching.
+    """
+
+    __slots__ = ("text", "start", "end", "confidence", "speaker")
+
+    def __init__(self, text: str, start: int, end: int, confidence: float):
+        self.text = text
+        self.start = start
+        self.end = end
+        self.confidence = confidence
+        self.speaker = None
+
+
+class _WhisperTranscript:
+    """Duck-typed transcript mirroring the AssemblyAI transcript shape used here."""
+
+    __slots__ = ("words", "utterances", "text")
+
+    def __init__(self, words: List["_WhisperWord"], text: str):
+        self.words = words
+        # No diarization on the whisper path; downstream falls back to
+        # word-grouping when utterances is empty.
+        self.utterances = []
+        self.text = text
+
+
+def get_video_transcript_whisper(
+    video_path: Path, model_size: str = "base"
+) -> str:
+    """Get transcript locally with faster-whisper, mirroring get_video_transcript.
+
+    Produces the same `[MM:SS - MM:SS] text` formatted output and writes the same
+    `.transcript_cache.json` schema as the AssemblyAI path, so the rest of the
+    pipeline is unaffected.
+    """
+    from faster_whisper import WhisperModel
+
+    logger.info(f"Getting transcript (faster-whisper, model={model_size}) for: {video_path}")
+
+    # 16kHz mono audio is exactly what Whisper expects.
+    audio_path = _prepare_audio_for_transcription(video_path)
+
+    model = WhisperModel(model_size, device="cpu", compute_type="int8")
+    segments, _info = model.transcribe(str(audio_path), word_timestamps=True)
+
+    words: List[_WhisperWord] = []
+    text_parts: List[str] = []
+    for segment in segments:
+        for word in getattr(segment, "words", None) or []:
+            token = word.word
+            if token is None:
+                continue
+            cleaned = token.strip()
+            if not cleaned:
+                continue
+            # faster-whisper emits seconds; the pipeline wants milliseconds.
+            start_ms = int(round((word.start or 0.0) * 1000))
+            end_ms = int(round((word.end or 0.0) * 1000))
+            probability = getattr(word, "probability", None)
+            confidence = float(probability) if probability is not None else 1.0
+            words.append(_WhisperWord(cleaned, start_ms, end_ms, confidence))
+            text_parts.append(cleaned)
+
+    transcript_obj = _WhisperTranscript(words, " ".join(text_parts))
+
+    cache_transcript_data(video_path, transcript_obj)
+
+    formatted_lines = format_transcript_for_analysis(transcript_obj)
+    result = "\n".join(formatted_lines)
+    logger.info(
+        f"Whisper transcript formatted: {len(formatted_lines)} segments, {len(result)} chars"
+    )
+    return result
+
+
 def cache_transcript_data(video_path: Path, transcript) -> None:
     """Cache AssemblyAI transcript data for subtitle generation."""
     cache_path = video_path.with_suffix(".transcript_cache.json")
