@@ -53,6 +53,10 @@ If you are new to the project, start here:
   - Local transcription with faster-whisper (no AssemblyAI key)
   - claude-cli LLM provider (self-host only, no Anthropic API key)
   - Self-host versus Docker support matrix
+- [Running on Windows](./windows.md)
+  - Docker Desktop path (recommended)
+  - Native Windows dev path (needed for claude-cli)
+  - The `frieren.ps1` PowerShell helper and Windows troubleshooting
 
 ## What SupoClip Is
 
