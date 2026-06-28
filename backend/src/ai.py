@@ -77,6 +77,32 @@ class ViralityAnalysis(BaseModel):
         description="Explanation of the virality score",
     )
 
+    @field_validator(
+        "hook_score",
+        "engagement_score",
+        "value_score",
+        "shareability_score",
+        "total_score",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_score_to_int(cls, value: Any) -> Any:
+        """Round fractional scores to int.
+
+        The pydantic-ai Agent path constrains output to the schema, but the
+        claude-cli path parses free-form JSON, where models routinely return
+        fractional scores (8.25, 7.5). Round to the nearest int instead of
+        failing the whole job.
+        """
+        if isinstance(value, float):
+            return round(value)
+        if isinstance(value, str):
+            try:
+                return round(float(value))
+            except ValueError:
+                return value
+        return value
+
     @field_validator("hook_type", mode="before")
     @classmethod
     def _coerce_hook_type(cls, value: Any) -> Any:
