@@ -84,6 +84,9 @@ services:
       # Mount host Claude config so the claude-cli LLM provider can authenticate.
       # Only needed when LLM=claude-cli:*; harmless otherwise.
       - ~/.claude:/root/.claude
+      # Drop large videos into ./local-media on the host and reference them as
+      # local:///app/input/<filename> to process them in place (read-only).
+      - ./local-media:/app/input:ro
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -161,6 +164,9 @@ services:
       # Mount host Claude config so the claude-cli LLM provider can authenticate.
       # Only needed when LLM=claude-cli:*; harmless otherwise.
       - ~/.claude:/root/.claude
+      # Drop large videos into ./local-media on the host and reference them as
+      # local:///app/input/<filename> to process them in place (read-only).
+      - ./local-media:/app/input:ro
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
